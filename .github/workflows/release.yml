@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 env:
-  AUTOQUEUE_CF_ID: "REPLACE_WITH_CURSEFORGE_PROJECT_ID"
+  AUTOQUEUE_CF_ID: "1462604"
 
 jobs:
   release:
