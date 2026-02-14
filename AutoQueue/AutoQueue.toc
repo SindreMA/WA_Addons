@@ -1,0 +1,13 @@
+## Interface: 120001
+## Title: AutoQueue
+## Notes: Automatically accepts LFG role checks. Toggle via minimap button.
+## Author: SindreMA (Bestkeystone.com)
+## Version: 2.0.0
+## SavedVariables: AutoQueueDB
+
+Libs/LibStub/LibStub.lua
+Libs/CallbackHandler-1.0/CallbackHandler-1.0.lua
+Libs/LibDataBroker-1.1/LibDataBroker-1.1.lua
+Libs/LibDBIcon-1.0/LibDBIcon-1.0.lua
+
+AutoQueue.lua
