@@ -5,8 +5,10 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'AutoQueue/**'
+    paths-ignore:
+      - '.github/**'
+      - '*.md'
+      - '.gitignore'
 
 permissions:
   contents: write
