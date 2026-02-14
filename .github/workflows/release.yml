@@ -2,11 +2,16 @@ name: Package and Release to CurseForge
 
 on:
   push:
-    tags:
-      - '*-v*'  # e.g. AutoQueue-v2.0.0
+    branches:
+      - main
+    paths:
+      - 'AutoQueue/**'
 
 permissions:
   contents: write
+
+env:
+  AUTOQUEUE_CF_ID: "REPLACE_WITH_CURSEFORGE_PROJECT_ID"
 
 jobs:
   release:
@@ -16,84 +21,81 @@ jobs:
       - name: Clone project
         uses: actions/checkout@v4
 
-      - name: Parse tag
-        id: parse
+      - name: Read version from TOC
+        id: info
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          ADDON_NAME="${TAG%-v*}"
-          VERSION="${TAG#*-v}"
-          echo "addon=${ADDON_NAME}" >> "$GITHUB_OUTPUT"
+          ADDON="AutoQueue"
+          VERSION=$(grep -oP '## Version: \K.*' "${ADDON}/${ADDON}.toc" | tr -d '[:space:]')
+          echo "addon=${ADDON}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "Addon: ${ADDON_NAME}, Version: ${VERSION}"
+          echo "${ADDON} version: ${VERSION}"
 
-      - name: Read addon config
-        id: config
+      - name: Check if release already exists
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          ADDON="${{ steps.parse.outputs.addon }}"
-          if [ ! -d "${ADDON}" ]; then
-            echo "::error::Addon directory '${ADDON}' not found"
-            exit 1
-          fi
-          # Read CurseForge project ID from addon's .curseforge file
-          if [ -f "${ADDON}/.curseforge" ]; then
-            CF_PROJECT_ID=$(grep '^project-id=' "${ADDON}/.curseforge" | cut -d'=' -f2)
-            echo "cf_project_id=${CF_PROJECT_ID}" >> "$GITHUB_OUTPUT"
+          TAG="${{ steps.info.outputs.addon }}-v${{ steps.info.outputs.version }}"
+          if gh release view "${TAG}" > /dev/null 2>&1; then
+            echo "Release ${TAG} already exists, skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::error::No .curseforge config found in ${ADDON}/"
-            exit 1
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Package addon
+        if: steps.check.outputs.skip == 'false'
         run: |
-          ADDON="${{ steps.parse.outputs.addon }}"
+          ADDON="${{ steps.info.outputs.addon }}"
           cd "${ADDON}"
           zip -r "../${ADDON}.zip" . -x ".*"
           cd ..
           ls -la "${ADDON}.zip"
 
       - name: Create GitHub Release
+        if: steps.check.outputs.skip == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          name: "${{ steps.parse.outputs.addon }} v${{ steps.parse.outputs.version }}"
-          files: "${{ steps.parse.outputs.addon }}.zip"
+          tag_name: "${{ steps.info.outputs.addon }}-v${{ steps.info.outputs.version }}"
+          name: "${{ steps.info.outputs.addon }} v${{ steps.info.outputs.version }}"
+          files: "${{ steps.info.outputs.addon }}.zip"
           generate_release_notes: true
 
       - name: Upload to CurseForge
+        if: steps.check.outputs.skip == 'false'
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
         run: |
-          ADDON="${{ steps.parse.outputs.addon }}"
-          VERSION="${{ steps.parse.outputs.version }}"
-          CF_PROJECT_ID="${{ steps.config.outputs.cf_project_id }}"
+          ADDON="${{ steps.info.outputs.addon }}"
+          VERSION="${{ steps.info.outputs.version }}"
+          CF_PROJECT_ID="${AUTOQUEUE_CF_ID}"
 
           if [ -z "${CF_API_KEY}" ]; then
             echo "::warning::CF_API_KEY secret not set, skipping CurseForge upload"
             exit 0
           fi
 
-          if [ -z "${CF_PROJECT_ID}" ]; then
+          if [ -z "${CF_PROJECT_ID}" ] || echo "${CF_PROJECT_ID}" | grep -q "REPLACE"; then
             echo "::warning::No CurseForge project ID configured, skipping upload"
             exit 0
           fi
 
-          # Get the latest game version ID for retail WoW
           GAME_VERSIONS=$(curl -s -H "X-Api-Token: ${CF_API_KEY}" \
             "https://wow.curseforge.com/api/game/versions")
 
-          # Find the latest retail version ID
           RETAIL_VERSION_ID=$(echo "${GAME_VERSIONS}" | jq '[.[] | select(.gameVersionTypeID == 517)] | sort_by(.id) | last | .id')
 
-          METADATA=$(cat <<EOF
+          METADATA=$(cat <<'METAEOF'
           {
-            "changelog": "Release ${VERSION}",
+            "changelog": "Release VPLACEHOLDER",
             "changelogType": "text",
-            "displayName": "${ADDON}-${VERSION}",
-            "gameVersions": [${RETAIL_VERSION_ID}],
+            "displayName": "APLACEHOLDER",
+            "gameVersions": [GPLACEHOLDER],
             "releaseType": "release"
           }
-          EOF
+          METAEOF
           )
+          METADATA=$(echo "${METADATA}" | sed "s/VPLACEHOLDER/${VERSION}/;s/APLACEHOLDER/${ADDON}-${VERSION}/;s/GPLACEHOLDER/${RETAIL_VERSION_ID}/")
 
           echo "Uploading ${ADDON}.zip to CurseForge project ${CF_PROJECT_ID}..."
 
