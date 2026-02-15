@@ -17,32 +17,38 @@ env:
 
 jobs:
   release:
+    if: "!contains(github.event.head_commit.message, 'chore: bump')"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Read version from TOC
+      - name: Bump patch version in TOC
         id: info
         run: |
-          VERSION=$(grep -oP '## Version: \K.*' "${ADDON}/${ADDON}.toc" | tr -d '[:space:]')
+          TOC="${ADDON}/${ADDON}.toc"
+          OLD_VERSION=$(grep -oP '## Version: \K.*' "${TOC}" | tr -d '[:space:]')
+          MAJOR=$(echo "${OLD_VERSION}" | cut -d. -f1)
+          MINOR=$(echo "${OLD_VERSION}" | cut -d. -f2)
+          PATCH=$(echo "${OLD_VERSION}" | cut -d. -f3)
+          PATCH=$((PATCH + 1))
+          VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          sed -i "s/## Version: .*/## Version: ${VERSION}/" "${TOC}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "${ADDON} version: ${VERSION}"
+          echo "${ADDON} version: ${OLD_VERSION} -> ${VERSION}"
 
-      - name: Check if release already exists
-        id: check
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Commit version bump
         run: |
-          TAG="${ADDON}-v${{ steps.info.outputs.version }}"
-          if gh release view "${TAG}" > /dev/null 2>&1; then
-            echo "Release ${TAG} already exists, skipping"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "${ADDON}/${ADDON}.toc"
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "chore: bump ${ADDON} to v${{ steps.info.outputs.version }}"
+          git push
 
       - name: Package addon
-        if: steps.check.outputs.skip == 'false' || github.event_name == 'workflow_dispatch'
+        if: success()
         run: |
           cd "${ADDON}"
           zip -r "../${ADDON}.zip" . -x ".*"
@@ -50,7 +56,7 @@ jobs:
           ls -la "${ADDON}.zip"
 
       - name: Create GitHub Release
-        if: steps.check.outputs.skip == 'false' || github.event_name == 'workflow_dispatch'
+        if: success()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "${{ env.ADDON }}-v${{ steps.info.outputs.version }}"
@@ -59,7 +65,7 @@ jobs:
           generate_release_notes: true
 
       - name: Upload to CurseForge
-        if: steps.check.outputs.skip == 'false' || github.event_name == 'workflow_dispatch'
+        if: success()
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
         run: |
