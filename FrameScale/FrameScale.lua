@@ -157,7 +157,7 @@ local function GetFramesAtCursor()
             end
 
             if not skip then
-                local fsOk, isFS = pcall(IsFullScreenFrame, frame)
+                local fsOk, isFS = securecallfunction(pcall, IsFullScreenFrame, frame)
                 if fsOk and isFS then
                     skip = true
                 end
@@ -166,7 +166,7 @@ local function GetFramesAtCursor()
             -- IsMouseOver handles all coordinate/scale conversion internally
             -- pcall guards against "Can't measure restricted regions" on nameplates etc.
             if not skip then
-                local ok, over = pcall(frame.IsMouseOver, frame)
+                local ok, over = securecallfunction(pcall, frame.IsMouseOver, frame)
                 if ok and over then
                     table.insert(frames, frame)
                 end
