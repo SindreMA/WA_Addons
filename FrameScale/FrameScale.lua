@@ -156,8 +156,11 @@ local function GetFramesAtCursor()
                 end
             end
 
-            if not skip and IsFullScreenFrame(frame) then
-                skip = true
+            if not skip then
+                local fsOk, isFS = pcall(IsFullScreenFrame, frame)
+                if fsOk and isFS then
+                    skip = true
+                end
             end
 
             -- IsMouseOver handles all coordinate/scale conversion internally
