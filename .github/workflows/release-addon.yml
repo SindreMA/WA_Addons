@@ -13,9 +13,6 @@ on:
       CF_API_KEY:
         required: false
 
-permissions:
-  contents: write
-
 env:
   ADDON: ${{ inputs.addon }}
   CF_PROJECT_ID: ${{ inputs.cf_project_id }}
