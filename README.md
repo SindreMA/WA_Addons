@@ -79,4 +79,4 @@ The GitHub Actions workflow (`.github/workflows/release.yml`) automatically:
 |---|---|---|---|
 | [AutoQueue](AutoQueue/) | [wago.io/3IxDUtinb](https://wago.io/3IxDUtinb) | [CurseForge](https://www.curseforge.com/wow/addons/autoqueue-wa) | Auto-accepts LFG role checks. Minimap button to toggle on/off. |
 | [FrameScale](FrameScale/) | — | — | Set custom scaling for any UI frame. Minimap button to toggle scale mode, right-click for settings panel. |
-| [DetailsOverallViewer](DetailsOverallViewer/) | [wago.io/wJjtCErAd](https://wago.io/wJjtCErAd) | — | Hold a modifier key to switch Details! windows to Overall view. Right-click minimap button to pick modifier. |
+| [DetailsQuickKeybinds](DetailsQuickKeybinds/) | [wago.io/wJjtCErAd](https://wago.io/wJjtCErAd) | — | Dynamic modifier-key keybinds for Details! windows. Hold or toggle to switch views, segments, attributes. Full settings UI. |

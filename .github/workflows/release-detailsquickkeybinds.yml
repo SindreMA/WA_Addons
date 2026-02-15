@@ -1,18 +1,18 @@
-name: Release DetailsOverallViewer
+name: Release DetailsQuickKeybinds
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - 'DetailsOverallViewer/**'
-      - '.github/workflows/release-detailsoverallviewer.yml'
+      - 'DetailsQuickKeybinds/**'
+      - '.github/workflows/release-detailsquickkeybinds.yml'
 
 permissions:
   contents: write
 
 env:
-  ADDON: DetailsOverallViewer
+  ADDON: DetailsQuickKeybinds
   CF_PROJECT_ID: "0"
 
 jobs:

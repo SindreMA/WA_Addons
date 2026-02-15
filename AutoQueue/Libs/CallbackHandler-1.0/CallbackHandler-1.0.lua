@@ -5,7 +5,7 @@ local CallbackHandler = LibStub:NewLibrary(MAJOR, MINOR)
 if not CallbackHandler then return end -- No upgrade needed
 
 -- Lua APIs
-local tconcat, tinsert, tgetn, tsetn = table.concat, table.insert, table.getn, table.setn
+local tconcat, tinsert = table.concat, table.insert
 local assert, error, loadstring = assert, error, loadstring
 local setmetatable, rawset, rawget = setmetatable, rawset, rawget
 local next, pairs, type, tostring = next, pairs, type, tostring
@@ -28,7 +28,6 @@ function del(t)
 	for k in pairs(t) do
 		t[k] = nil
 	end
-	tsetn(t,0)
 	list[t] = true
 end
 end
@@ -152,7 +151,7 @@ function CallbackHandler:New(target, RegisterName, UnregisterName, UnregisterAll
 		end
 
 		local regfunc
-		local a1 = arg[1]
+		local extra = select("#", ...)
 
 		if type(method) == "string" then
 			-- self["method"] calling style
@@ -164,10 +163,11 @@ function CallbackHandler:New(target, RegisterName, UnregisterName, UnregisterAll
 				error("Usage: "..RegisterName.."(eventname, method[, arg]): 'method' - method '"..tostring(method).."' not found on 'self'.", 2)
 			end
 
-			if tgetn(arg) >= 1 then
-				regfunc = function (...) return self[method](self,a1,unpack(arg)) end
+			if extra >= 1 then
+				local a1 = ...
+				regfunc = function (...) return self[method](self,a1,...) end
 			else
-				regfunc = function (...) return self[method](self,unpack(arg)) end
+				regfunc = function (...) return self[method](self,...) end
 			end
 		else
 			-- function ref with self=object or self="addonId"
@@ -175,8 +175,9 @@ function CallbackHandler:New(target, RegisterName, UnregisterName, UnregisterAll
 				error("Usage: "..RegisterName.."(self or addonId, eventname, method[, arg]): 'self or addonId': table or string expected.", 2)
 			end
 
-			if tgetn(arg) >= 1 then
-				regfunc = function (...) return method(a1, unpack(arg)) end
+			if extra >= 1 then
+				local a1 = ...
+				regfunc = function (...) return method(a1, ...) end
 			else
 				regfunc = method
 			end
