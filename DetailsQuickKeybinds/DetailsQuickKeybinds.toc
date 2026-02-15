@@ -2,7 +2,7 @@
 ## Title: Details Quick Keybinds
 ## Notes: Dynamic modifier-key keybinds for Details! windows. Hold or toggle to switch views.
 ## Author: SindreMA (Bestkeystone.com)
-## Version: 1.0.0
+## Version: 1.0.1
 ## SavedVariables: DetailsQuickKeybindsDB
 
 Libs/LibStub/LibStub.lua
