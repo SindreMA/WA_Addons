@@ -1,0 +1,108 @@
+name: Release AutoQueue
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'AutoQueue/**'
+      - '.github/workflows/release-autoqueue.yml'
+
+permissions:
+  contents: write
+
+env:
+  ADDON: AutoQueue
+  CF_PROJECT_ID: "1462604"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version from TOC
+        id: info
+        run: |
+          VERSION=$(grep -oP '## Version: \K.*' "${ADDON}/${ADDON}.toc" | tr -d '[:space:]')
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "${ADDON} version: ${VERSION}"
+
+      - name: Check if release already exists
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${ADDON}-v${{ steps.info.outputs.version }}"
+          if gh release view "${TAG}" > /dev/null 2>&1; then
+            echo "Release ${TAG} already exists, skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package addon
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          cd "${ADDON}"
+          zip -r "../${ADDON}.zip" . -x ".*"
+          cd ..
+          ls -la "${ADDON}.zip"
+
+      - name: Create GitHub Release
+        if: steps.check.outputs.skip == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "${{ env.ADDON }}-v${{ steps.info.outputs.version }}"
+          name: "${{ env.ADDON }} v${{ steps.info.outputs.version }}"
+          files: "${{ env.ADDON }}.zip"
+          generate_release_notes: true
+
+      - name: Upload to CurseForge
+        if: steps.check.outputs.skip == 'false'
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+        run: |
+          VERSION="${{ steps.info.outputs.version }}"
+
+          if [ -z "${CF_API_KEY}" ]; then
+            echo "::warning::CF_API_KEY secret not set, skipping CurseForge upload"
+            exit 0
+          fi
+
+          GAME_VERSIONS=$(curl -s -H "X-Api-Token: ${CF_API_KEY}" \
+            "https://wow.curseforge.com/api/game/versions")
+
+          RETAIL_VERSION_ID=$(echo "${GAME_VERSIONS}" | jq '[.[] | select(.gameVersionTypeID == 517)] | sort_by(.id) | last | .id')
+
+          METADATA=$(cat <<'METAEOF'
+          {
+            "changelog": "Release VPLACEHOLDER",
+            "changelogType": "text",
+            "displayName": "APLACEHOLDER",
+            "gameVersions": [GPLACEHOLDER],
+            "releaseType": "release"
+          }
+          METAEOF
+          )
+          METADATA=$(echo "${METADATA}" | sed "s/VPLACEHOLDER/${VERSION}/;s/APLACEHOLDER/${ADDON}-${VERSION}/;s/GPLACEHOLDER/${RETAIL_VERSION_ID}/")
+
+          echo "Uploading ${ADDON}.zip to CurseForge project ${CF_PROJECT_ID}..."
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "X-Api-Token: ${CF_API_KEY}" \
+            -F "metadata=${METADATA}" \
+            -F "file=@${ADDON}.zip" \
+            "https://wow.curseforge.com/api/projects/${CF_PROJECT_ID}/upload-file")
+
+          HTTP_CODE=$(echo "${RESPONSE}" | tail -1)
+          BODY=$(echo "${RESPONSE}" | sed '$d')
+
+          echo "Response (${HTTP_CODE}): ${BODY}"
+
+          if [ "${HTTP_CODE}" -ge 400 ]; then
+            echo "::error::CurseForge upload failed with status ${HTTP_CODE}"
+            exit 1
+          fi
+
+          echo "Successfully uploaded to CurseForge!"

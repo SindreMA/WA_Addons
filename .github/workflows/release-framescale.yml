@@ -1,40 +1,30 @@
-name: Package and Release to CurseForge
+name: Release FrameScale
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
-    paths-ignore:
-      - '.github/**'
-      - '*.md'
-      - '.gitignore'
+    branches: [main]
+    paths:
+      - 'FrameScale/**'
+      - '.github/workflows/release-framescale.yml'
 
 permissions:
   contents: write
 
+env:
+  ADDON: FrameScale
+  CF_PROJECT_ID: "1462718"
+
 jobs:
   release:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - addon: AutoQueue
-            cf_id: "1462604"
-          - addon: FrameScale
-            cf_id: "1462718"
-
     steps:
-      - name: Clone project
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Read version from TOC
         id: info
         run: |
-          ADDON="${{ matrix.addon }}"
           VERSION=$(grep -oP '## Version: \K.*' "${ADDON}/${ADDON}.toc" | tr -d '[:space:]')
-          echo "addon=${ADDON}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "${ADDON} version: ${VERSION}"
 
@@ -43,7 +33,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${{ steps.info.outputs.addon }}-v${{ steps.info.outputs.version }}"
+          TAG="${ADDON}-v${{ steps.info.outputs.version }}"
           if gh release view "${TAG}" > /dev/null 2>&1; then
             echo "Release ${TAG} already exists, skipping"
             echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -54,7 +44,6 @@ jobs:
       - name: Package addon
         if: steps.check.outputs.skip == 'false'
         run: |
-          ADDON="${{ steps.info.outputs.addon }}"
           cd "${ADDON}"
           zip -r "../${ADDON}.zip" . -x ".*"
           cd ..
@@ -64,9 +53,9 @@ jobs:
         if: steps.check.outputs.skip == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "${{ steps.info.outputs.addon }}-v${{ steps.info.outputs.version }}"
-          name: "${{ steps.info.outputs.addon }} v${{ steps.info.outputs.version }}"
-          files: "${{ steps.info.outputs.addon }}.zip"
+          tag_name: "${{ env.ADDON }}-v${{ steps.info.outputs.version }}"
+          name: "${{ env.ADDON }} v${{ steps.info.outputs.version }}"
+          files: "${{ env.ADDON }}.zip"
           generate_release_notes: true
 
       - name: Upload to CurseForge
@@ -74,17 +63,10 @@ jobs:
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
         run: |
-          ADDON="${{ steps.info.outputs.addon }}"
           VERSION="${{ steps.info.outputs.version }}"
-          CF_PROJECT_ID="${{ matrix.cf_id }}"
 
           if [ -z "${CF_API_KEY}" ]; then
             echo "::warning::CF_API_KEY secret not set, skipping CurseForge upload"
-            exit 0
-          fi
-
-          if [ -z "${CF_PROJECT_ID}" ] || echo "${CF_PROJECT_ID}" | grep -q "REPLACE"; then
-            echo "::warning::No CurseForge project ID configured, skipping upload"
             exit 0
           fi
 
