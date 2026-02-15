@@ -4,14 +4,77 @@ local addonName = ...
 local defaults = {
     active = true,
     autoReady = false,
+    autoPartyAccept = "off", -- "off", "friends", "guild", "everyone"
     minimap = { hide = false },
 }
+
+local partyAcceptModes = { "off", "friends", "guild", "everyone" }
+local partyAcceptLabels = {
+    off = "|cffff0000Off|r",
+    friends = "|cff00ff00Friends|r",
+    guild = "|cffffff00Guild|r",
+    everyone = "|cffff8000Everyone|r",
+}
+
+local function NextPartyAcceptMode()
+    local current = AutoQueueDB.autoPartyAccept or "off"
+    for i, mode in ipairs(partyAcceptModes) do
+        if mode == current then
+            return partyAcceptModes[(i % #partyAcceptModes) + 1]
+        end
+    end
+    return "off"
+end
+
+local function IsCharacterFriend(name)
+    for i = 1, C_FriendList.GetNumFriends() do
+        local info = C_FriendList.GetFriendInfoByIndex(i)
+        if info and info.name == name then
+            return true
+        end
+    end
+    -- Check BattleNet friends
+    for i = 1, BNGetNumFriends() do
+        local accountInfo = C_BattleNet.GetFriendAccountInfo(i)
+        if accountInfo and accountInfo.gameAccountInfo then
+            local charName = accountInfo.gameAccountInfo.characterName
+            if charName and (charName == name or name:find("^" .. charName)) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function IsGuildMember(name)
+    if not IsInGuild() then return false end
+    for i = 1, GetNumGuildMembers() do
+        local fullName = GetGuildRosterInfo(i)
+        if fullName then
+            local shortName = fullName:match("^([^%-]+)")
+            if shortName == name or fullName == name then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function ShouldAutoAcceptParty(sender)
+    local mode = AutoQueueDB.autoPartyAccept or "off"
+    if mode == "off" then return false end
+    if mode == "everyone" then return true end
+    if mode == "friends" then return IsCharacterFriend(sender) end
+    if mode == "guild" then return IsCharacterFriend(sender) or IsGuildMember(sender) end
+    return false
+end
 
 -- Event frame
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("LFG_ROLE_CHECK_SHOW")
 frame:RegisterEvent("READY_CHECK")
+frame:RegisterEvent("PARTY_INVITE_REQUEST")
 
 -- Right-click dropdown menu
 local menuFrame = CreateFrame("Frame", "AutoQueueMenu", UIParent, "UIDropDownMenuTemplate")
@@ -51,6 +114,19 @@ local function InitMenu(self, level)
         else
             print("|cffb048f8AutoQueue:|r Auto Ready Check |cffff0000disabled|r.")
         end
+    end
+    UIDropDownMenu_AddButton(info, level)
+
+    info = UIDropDownMenu_CreateInfo()
+    info.text = "Auto Party Accept: " .. partyAcceptLabels[AutoQueueDB.autoPartyAccept or "off"]
+    info.notCheckable = true
+    info.keepShownOnClick = true
+    info.func = function()
+        AutoQueueDB.autoPartyAccept = NextPartyAcceptMode()
+        local label = partyAcceptLabels[AutoQueueDB.autoPartyAccept]
+        UIDropDownMenu_SetText(menuFrame, nil)
+        CloseDropDownMenus()
+        print("|cffb048f8AutoQueue:|r Auto Party Accept: " .. label)
     end
     UIDropDownMenu_AddButton(info, level)
 end
@@ -135,6 +211,14 @@ frame:SetScript("OnEvent", function(self, event, ...)
         if AutoQueueDB and AutoQueueDB.autoReady then
             ConfirmReadyCheck()
             print("|cffb048f8AutoQueue:|r Ready check accepted.")
+        end
+
+    elseif event == "PARTY_INVITE_REQUEST" then
+        local sender = ...
+        if sender and ShouldAutoAcceptParty(sender) then
+            AcceptGroup()
+            StaticPopup_Hide("PARTY_INVITE")
+            print("|cffb048f8AutoQueue:|r Party invite from " .. sender .. " auto-accepted.")
         end
     end
 end)
