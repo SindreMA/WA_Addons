@@ -2,7 +2,7 @@
 ## Title: FrameScale
 ## Notes: Set custom scaling for any UI frame. Minimap button to toggle scale mode, right-click for settings.
 ## Author: SindreMA (Bestkeystone.com)
-## Version: 1.0.1
+## Version: 1.0.2
 ## SavedVariables: FrameScaleDB
 
 Libs/LibStub/LibStub.lua
