@@ -78,3 +78,4 @@ The GitHub Actions workflow (`.github/workflows/release.yml`) automatically:
 | Addon | Source WeakAura | CurseForge | Description |
 |---|---|---|---|
 | [AutoQueue](AutoQueue/) | [wago.io/3IxDUtinb](https://wago.io/3IxDUtinb) | [CurseForge](https://www.curseforge.com/wow/addons/autoqueue-wa) | Auto-accepts LFG role checks. Minimap button to toggle on/off. |
+| [FrameScale](FrameScale/) | — | — | Set custom scaling for any UI frame. Minimap button to toggle scale mode, right-click for settings panel. |

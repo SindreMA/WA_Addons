@@ -1,0 +1,14 @@
+## Interface: 120001
+## Title: FrameScale
+## Notes: Set custom scaling for any UI frame. Minimap button to toggle scale mode, right-click for settings.
+## Author: SindreMA (Bestkeystone.com)
+## Version: 1.0.0
+## SavedVariables: FrameScaleDB
+
+Libs/LibStub/LibStub.lua
+Libs/CallbackHandler-1.0/CallbackHandler-1.0.lua
+Libs/LibDataBroker-1.1/LibDataBroker-1.1.lua
+Libs/LibDBIcon-1.0/LibDBIcon-1.0.lua
+
+FrameScale.lua
+FrameScale_Settings.lua

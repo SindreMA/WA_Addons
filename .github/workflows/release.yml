@@ -13,12 +13,17 @@ on:
 permissions:
   contents: write
 
-env:
-  AUTOQUEUE_CF_ID: "1462604"
-
 jobs:
   release:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - addon: AutoQueue
+            cf_id: "1462604"
+          - addon: FrameScale
+            cf_id: "1462718"
 
     steps:
       - name: Clone project
@@ -27,7 +32,7 @@ jobs:
       - name: Read version from TOC
         id: info
         run: |
-          ADDON="AutoQueue"
+          ADDON="${{ matrix.addon }}"
           VERSION=$(grep -oP '## Version: \K.*' "${ADDON}/${ADDON}.toc" | tr -d '[:space:]')
           echo "addon=${ADDON}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
@@ -71,7 +76,7 @@ jobs:
         run: |
           ADDON="${{ steps.info.outputs.addon }}"
           VERSION="${{ steps.info.outputs.version }}"
-          CF_PROJECT_ID="${AUTOQUEUE_CF_ID}"
+          CF_PROJECT_ID="${{ matrix.cf_id }}"
 
           if [ -z "${CF_API_KEY}" ]; then
             echo "::warning::CF_API_KEY secret not set, skipping CurseForge upload"
