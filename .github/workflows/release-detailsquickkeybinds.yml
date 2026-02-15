@@ -12,8 +12,8 @@ permissions:
   contents: write
 
 env:
-  ADDON: DetailsQuickKeybinds
-  CF_PROJECT_ID: "0"
+  ADDON: Details Quick Keybinds
+  CF_PROJECT_ID: "1463125"
 
 jobs:
   release:
