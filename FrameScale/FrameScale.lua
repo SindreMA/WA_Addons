@@ -161,8 +161,12 @@ local function GetFramesAtCursor()
             end
 
             -- IsMouseOver handles all coordinate/scale conversion internally
-            if not skip and frame:IsMouseOver() then
-                table.insert(frames, frame)
+            -- pcall guards against "Can't measure restricted regions" on nameplates etc.
+            if not skip then
+                local ok, over = pcall(frame.IsMouseOver, frame)
+                if ok and over then
+                    table.insert(frames, frame)
+                end
             end
         end
         frame = EnumerateFrames(frame)

@@ -1,0 +1,13 @@
+## Interface: 120001
+## Title: Details Overall Viewer
+## Notes: Hold a modifier key to switch Details! windows to Overall view. Release to go back to Current.
+## Author: SindreMA (Bestkeystone.com)
+## Version: 1.0.0
+## SavedVariables: DetailsOverallViewerDB
+
+Libs/LibStub/LibStub.lua
+Libs/CallbackHandler-1.0/CallbackHandler-1.0.lua
+Libs/LibDataBroker-1.1/LibDataBroker-1.1.lua
+Libs/LibDBIcon-1.0/LibDBIcon-1.0.lua
+
+DetailsOverallViewer.lua
