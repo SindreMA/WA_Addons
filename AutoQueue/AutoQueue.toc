@@ -2,7 +2,7 @@
 ## Title: AutoQueue
 ## Notes: Automatically accepts LFG role checks. Toggle via minimap button.
 ## Author: SindreMA (Bestkeystone.com)
-## Version: 2.0.1
+## Version: 2.0.2
 ## SavedVariables: AutoQueueDB
 
 Libs/LibStub/LibStub.lua

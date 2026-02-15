@@ -42,7 +42,7 @@ jobs:
           fi
 
       - name: Package addon
-        if: steps.check.outputs.skip == 'false'
+        if: steps.check.outputs.skip == 'false' || github.event_name == 'workflow_dispatch'
         run: |
           cd "${ADDON}"
           zip -r "../${ADDON}.zip" . -x ".*"
@@ -50,7 +50,7 @@ jobs:
           ls -la "${ADDON}.zip"
 
       - name: Create GitHub Release
-        if: steps.check.outputs.skip == 'false'
+        if: steps.check.outputs.skip == 'false' || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "${{ env.ADDON }}-v${{ steps.info.outputs.version }}"
@@ -59,7 +59,7 @@ jobs:
           generate_release_notes: true
 
       - name: Upload to CurseForge
-        if: steps.check.outputs.skip == 'false'
+        if: steps.check.outputs.skip == 'false' || github.event_name == 'workflow_dispatch'
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
         run: |
