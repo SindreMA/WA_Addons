@@ -55,9 +55,7 @@ jobs:
 
       - name: Package addon
         run: |
-          cd "${ADDON}"
-          zip -r "../${ADDON}.zip" . -x ".*"
-          cd ..
+          zip -r "${ADDON}.zip" "${ADDON}" -x "${ADDON}/.*"
           ls -la "${ADDON}.zip"
 
       - name: Create GitHub Release
