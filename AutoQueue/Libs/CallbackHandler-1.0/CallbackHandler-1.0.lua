@@ -1,5 +1,5 @@
---[[ $Id: CallbackHandler-1.0.lua 1131 2015-06-04 07:29:24Z nevcairiel $ ]]
-local MAJOR, MINOR = "CallbackHandler-1.0", 6
+--[[ $Id: CallbackHandler-1.0.lua 3 2024-01-01 00:00:00Z $ ]]
+local MAJOR, MINOR = "CallbackHandler-1.0", 8
 local CallbackHandler = LibStub:NewLibrary(MAJOR, MINOR)
 
 if not CallbackHandler then return end -- No upgrade needed
@@ -8,8 +8,9 @@ if not CallbackHandler then return end -- No upgrade needed
 local tconcat, tinsert = table.concat, table.insert
 local assert, error, loadstring = assert, error, loadstring
 local setmetatable, rawset, rawget = setmetatable, rawset, rawget
-local next, pairs, type, tostring = next, pairs, type, tostring
+local next, select, pairs, type, tostring = next, select, pairs, type, tostring
 local strgsub = string.gsub
+local xpcall = xpcall
 
 local new, del
 do
@@ -45,32 +46,25 @@ CallbackHandler.errorhandler = errorhandler
 
 local function CreateDispatcher(argCount)
 	local code = [[
-		local xpcall, errorhandler = xpcall, LibStub("CallbackHandler-1.0").errorhandler
-		local method, UP_ARGS
-		local function call()
-			local func, ARGS = method, UP_ARGS
-			method, UP_ARGS = nil, NILS
-			return func(ARGS)
-		end
-		return function(handlers, ARGS)
+		local next, xpcall, eh = next, ...
+		local method, ARGS
+		local function dispatch(handlers, ...)
 			local index
 			index, method = next(handlers)
 			if not method then return end
 			repeat
-				UP_ARGS = ARGS
-				xpcall(call, errorhandler)
+				ARGS = method
+				xpcall(ARGS, eh, ...)
 				index, method = next(handlers, index)
 			until not method
 		end
+		return dispatch
 	]]
-	local c = 4*argCount-1
-	local s = "b01,b02,b03,b04,b05,b06,b07,b08,b09,b10"
-	code = strgsub(code, "UP_ARGS", string.sub(s,1,c))
-	s = "a01,a02,a03,a04,a05,a06,a07,a08,a09,a10"
-	code = strgsub(code, "ARGS", string.sub(s,1,c))
-	s = "nil,nil,nil,nil,nil,nil,nil,nil,nil,nil"
-	code = strgsub(code, "NILS", string.sub(s,1,c))
-	return assert(loadstring(code, "safecall Dispatcher["..tostring(argCount).."]"))()
+
+	local ARGS = {}
+	for i = 1, argCount do ARGS[i] = "a"..i end
+	code = code:gsub("ARGS", tconcat(ARGS, ", "))
+	return assert(loadstring(code, "safecall Dispatcher["..tostring(argCount).."]"))(next, xpcall, errorhandler)
 end
 
 local Dispatchers = setmetatable({}, {__index=function(self, argCount)
@@ -103,13 +97,12 @@ function CallbackHandler:New(target, RegisterName, UnregisterName, UnregisterAll
 	local registry = { recurse=0, events=events }
 
 	-- registry:Fire() - fires the given event/message into the registry
-	function registry:Fire(eventname, argc, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10)
+	function registry:Fire(eventname, ...)
 		if not rawget(events, eventname) or not next(events[eventname]) then return end
 		local oldrecurse = registry.recurse
 		registry.recurse = oldrecurse + 1
 
-		argc = argc or 0
-		Dispatchers[argc+1](events[eventname], eventname, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10)
+		Dispatchers[select("#", ...) + 1](events[eventname], eventname, ...)
 
 		registry.recurse = oldrecurse
 

@@ -212,7 +212,7 @@ local function createButton(name, object, db)
 		if not db or not db.hide then button:Show()
 		else button:Hide() end
 	end
-	lib.callbacks:Fire("LibDBIcon_IconCreated", 2, button, name) -- Fire 'Icon Created' callback
+	lib.callbacks:Fire("LibDBIcon_IconCreated", button, name) -- Fire 'Icon Created' callback
 end
 
 -- We could use a metatable.__index on lib.objects, but then we'd create

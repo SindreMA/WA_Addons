@@ -1,9 +1,8 @@
 local addonName, ns = ...
 
-local FRAME_WIDTH = 600
+local FRAME_WIDTH = 620
 local FRAME_HEIGHT = 500
 local BIND_HEADER_HEIGHT = 30
-local ACTION_ROW_HEIGHT = 26
 local BIND_PADDING = 6
 
 local settingsFrame
@@ -25,7 +24,6 @@ end
 
 local VIEW_OPTIONS = BuildViewOptions()
 
--- Find index in VIEW_OPTIONS matching attribute/sub_attribute
 local function FindViewIndex(attribute, sub_attribute)
     if not attribute then return 1 end
     for i, opt in ipairs(VIEW_OPTIONS) do
@@ -36,13 +34,20 @@ local function FindViewIndex(attribute, sub_attribute)
     return 1
 end
 
--- Window display label
 local function WindowLabel(windowId)
     if windowId == ns.ALL_WINDOWS then return "All" end
     return "" .. windowId
 end
 
--- Simple dropdown helper using UIDropDownMenu
+local function SegmentLabel(segId)
+    if segId == nil then return "No Change" end
+    for _, seg in ipairs(ns.SEGMENTS) do
+        if seg.id == segId then return seg.name end
+    end
+    return "No Change"
+end
+
+-- Simple dropdown helper
 local dropdownCounter = 0
 local function CreateDropdown(parent, width, initFunc)
     dropdownCounter = dropdownCounter + 1
@@ -53,11 +58,75 @@ local function CreateDropdown(parent, width, initFunc)
     return dd
 end
 
+-- Create a state row (segment + view dropdowns)
+local function CreateStateRow(parent, bindFrame, label, stateData, yOffset, onChanged)
+    local row = CreateFrame("Frame", nil, bindFrame)
+    row:SetPoint("TOPLEFT", bindFrame, "TOPLEFT", 8, yOffset)
+    row:SetPoint("RIGHT", bindFrame, "RIGHT", -8, 0)
+    row:SetHeight(26)
+
+    local bg = row:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0.15, 0.15, 0.15, 0.3)
+
+    local lbl = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    lbl:SetPoint("LEFT", row, "LEFT", 4, 0)
+    lbl:SetText(label)
+    lbl:SetWidth(50)
+
+    -- Segment dropdown
+    local segDD = CreateDropdown(row, 70, function(self, level)
+        local info = UIDropDownMenu_CreateInfo()
+        info.text = "No Change"
+        info.checked = (stateData.segment == nil)
+        info.func = function()
+            stateData.segment = nil
+            CloseDropDownMenus()
+            onChanged()
+        end
+        UIDropDownMenu_AddButton(info, level)
+
+        for _, seg in ipairs(ns.SEGMENTS) do
+            info = UIDropDownMenu_CreateInfo()
+            info.text = seg.name
+            info.checked = (stateData.segment == seg.id)
+            info.func = function()
+                stateData.segment = seg.id
+                CloseDropDownMenus()
+                onChanged()
+            end
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end)
+    segDD:SetPoint("LEFT", row, "LEFT", 44, 0)
+    UIDropDownMenu_SetText(segDD, SegmentLabel(stateData.segment))
+
+    -- View dropdown
+    local viewDD = CreateDropdown(row, 130, function(self, level)
+        for i, opt in ipairs(VIEW_OPTIONS) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = opt.label
+            info.checked = (FindViewIndex(stateData.attribute, stateData.sub_attribute) == i)
+            info.func = function()
+                stateData.attribute = opt.attribute
+                stateData.sub_attribute = opt.sub_attribute
+                CloseDropDownMenus()
+                onChanged()
+            end
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end)
+    viewDD:SetPoint("LEFT", row, "LEFT", 190, 0)
+    local viewText = VIEW_OPTIONS[FindViewIndex(stateData.attribute, stateData.sub_attribute)].label
+    UIDropDownMenu_SetText(viewDD, viewText)
+
+    return row
+end
+
 local function RefreshSettings()
     if not settingsFrame or not settingsFrame:IsShown() then return end
 
     local content = settingsFrame.scrollContent
-    -- Hide all existing children
     for _, child in ipairs({ content:GetChildren() }) do
         child:Hide()
     end
@@ -66,7 +135,6 @@ local function RefreshSettings()
     local yOffset = 0
 
     for bindIdx, bind in ipairs(binds) do
-        -- Bind container frame
         local bindFrame = CreateFrame("Frame", nil, content, "BackdropTemplate")
         bindFrame:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -yOffset)
         bindFrame:SetPoint("RIGHT", content, "RIGHT", 0, 0)
@@ -74,13 +142,12 @@ local function RefreshSettings()
         bindFrame:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
         bindFrame:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.6)
 
-        -- Header row
+        -- Header row: Name, Key, Mode, Delete
         local headerRow = CreateFrame("Frame", nil, bindFrame)
         headerRow:SetPoint("TOPLEFT", bindFrame, "TOPLEFT", 4, -4)
         headerRow:SetPoint("RIGHT", bindFrame, "RIGHT", -4, 0)
         headerRow:SetHeight(BIND_HEADER_HEIGHT)
 
-        -- Name input
         local nameLabel = headerRow:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         nameLabel:SetPoint("LEFT", headerRow, "LEFT", 4, 0)
         nameLabel:SetText("Name:")
@@ -96,7 +163,6 @@ local function RefreshSettings()
             binds[bindIdx].name = self:GetText()
         end)
 
-        -- Key dropdown
         local keyLabel = headerRow:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         keyLabel:SetPoint("LEFT", nameBox, "RIGHT", 10, 0)
         keyLabel:SetText("Key:")
@@ -117,7 +183,6 @@ local function RefreshSettings()
         keyDD:SetPoint("LEFT", keyLabel, "RIGHT", -8, -2)
         UIDropDownMenu_SetText(keyDD, ns.MODIFIER_LABELS[bind.key] or bind.key)
 
-        -- Mode dropdown (wider to fit "Toggle")
         local modeLabel = headerRow:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         modeLabel:SetPoint("LEFT", keyDD, "RIGHT", 0, 2)
         modeLabel:SetText("Mode:")
@@ -138,7 +203,6 @@ local function RefreshSettings()
         modeDD:SetPoint("LEFT", modeLabel, "RIGHT", -8, -2)
         UIDropDownMenu_SetText(modeDD, bind.mode:sub(1, 1):upper() .. bind.mode:sub(2))
 
-        -- Delete bind button
         local deleteBtn = CreateFrame("Button", nil, headerRow, "UIPanelButtonTemplate")
         deleteBtn:SetSize(20, 20)
         deleteBtn:SetPoint("RIGHT", headerRow, "RIGHT", -4, 0)
@@ -148,66 +212,59 @@ local function RefreshSettings()
             RefreshSettings()
         end)
 
-        -- Action rows
-        local actionYOffset = -(BIND_HEADER_HEIGHT + 8)
+        -- Window entries
+        local innerY = -(BIND_HEADER_HEIGHT + 4)
 
         -- Column headers
         local colHeader = CreateFrame("Frame", nil, bindFrame)
-        colHeader:SetPoint("TOPLEFT", bindFrame, "TOPLEFT", 8, actionYOffset)
+        colHeader:SetPoint("TOPLEFT", bindFrame, "TOPLEFT", 8, innerY)
         colHeader:SetPoint("RIGHT", bindFrame, "RIGHT", -8, 0)
-        colHeader:SetHeight(16)
+        colHeader:SetHeight(14)
 
         local colWin = colHeader:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         colWin:SetPoint("LEFT", colHeader, "LEFT", 0, 0)
         colWin:SetText("|cff888888Window|r")
 
         local colSeg = colHeader:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        colSeg:SetPoint("LEFT", colHeader, "LEFT", 70, 0)
+        colSeg:SetPoint("LEFT", colHeader, "LEFT", 60, 0)
         colSeg:SetText("|cff888888Segment|r")
 
         local colView = colHeader:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        colView:SetPoint("LEFT", colHeader, "LEFT", 210, 0)
+        colView:SetPoint("LEFT", colHeader, "LEFT", 200, 0)
         colView:SetText("|cff888888View|r")
 
-        actionYOffset = actionYOffset - 18
+        innerY = innerY - 16
 
-        -- Sort window IDs for display (All=0 first, then 1, 2, 3...)
+        -- Sort window IDs
         local windowIds = {}
-        for wid in pairs(bind.actions) do
+        for wid in pairs(bind.windows) do
             table.insert(windowIds, wid)
         end
         table.sort(windowIds)
 
         for _, windowId in ipairs(windowIds) do
-            local action = bind.actions[windowId]
+            local winConfig = bind.windows[windowId]
 
-            local actionRow = CreateFrame("Frame", nil, bindFrame)
-            actionRow:SetPoint("TOPLEFT", bindFrame, "TOPLEFT", 8, actionYOffset)
-            actionRow:SetPoint("RIGHT", bindFrame, "RIGHT", -8, 0)
-            actionRow:SetHeight(ACTION_ROW_HEIGHT)
+            -- Window label + remove button
+            local winHeader = CreateFrame("Frame", nil, bindFrame)
+            winHeader:SetPoint("TOPLEFT", bindFrame, "TOPLEFT", 8, innerY)
+            winHeader:SetPoint("RIGHT", bindFrame, "RIGHT", -8, 0)
+            winHeader:SetHeight(20)
 
-            -- Background
-            local bg = actionRow:CreateTexture(nil, "BACKGROUND")
-            bg:SetAllPoints()
-            bg:SetColorTexture(0.15, 0.15, 0.15, 0.5)
-
-            -- Window ID dropdown (with "All" option)
-            local winDD = CreateDropdown(actionRow, 50, function(self, level)
-                -- "All" option
+            local winDD = CreateDropdown(winHeader, 44, function(self, level)
                 local info = UIDropDownMenu_CreateInfo()
                 info.text = "All"
                 info.checked = (windowId == ns.ALL_WINDOWS)
                 info.func = function()
                     if ns.ALL_WINDOWS ~= windowId then
-                        bind.actions[ns.ALL_WINDOWS] = bind.actions[windowId]
-                        bind.actions[windowId] = nil
+                        bind.windows[ns.ALL_WINDOWS] = bind.windows[windowId]
+                        bind.windows[windowId] = nil
                     end
                     CloseDropDownMenus()
                     RefreshSettings()
                 end
                 UIDropDownMenu_AddButton(info, level)
 
-                -- Individual windows
                 local numWins = (Details and Details.GetNumInstances and Details:GetNumInstances()) or 5
                 for wid = 1, math.max(numWins, 5) do
                     info = UIDropDownMenu_CreateInfo()
@@ -215,8 +272,8 @@ local function RefreshSettings()
                     info.checked = (windowId == wid)
                     info.func = function()
                         if wid ~= windowId then
-                            bind.actions[wid] = bind.actions[windowId]
-                            bind.actions[windowId] = nil
+                            bind.windows[wid] = bind.windows[windowId]
+                            bind.windows[windowId] = nil
                         end
                         CloseDropDownMenus()
                         RefreshSettings()
@@ -224,93 +281,50 @@ local function RefreshSettings()
                     UIDropDownMenu_AddButton(info, level)
                 end
             end)
-            winDD:SetPoint("LEFT", actionRow, "LEFT", -16, 0)
+            winDD:SetPoint("LEFT", winHeader, "LEFT", -16, 0)
             UIDropDownMenu_SetText(winDD, WindowLabel(windowId))
 
-            -- Segment dropdown
-            local segDD = CreateDropdown(actionRow, 70, function(self, level)
-                -- No Change option
-                local info = UIDropDownMenu_CreateInfo()
-                info.text = "No Change"
-                info.checked = (action.segment == nil)
-                info.func = function()
-                    binds[bindIdx].actions[windowId].segment = nil
-                    CloseDropDownMenus()
-                    RefreshSettings()
-                end
-                UIDropDownMenu_AddButton(info, level)
-
-                for _, seg in ipairs(ns.SEGMENTS) do
-                    info = UIDropDownMenu_CreateInfo()
-                    info.text = seg.name
-                    info.checked = (action.segment == seg.id)
-                    info.func = function()
-                        binds[bindIdx].actions[windowId].segment = seg.id
-                        CloseDropDownMenus()
-                        RefreshSettings()
-                    end
-                    UIDropDownMenu_AddButton(info, level)
-                end
-            end)
-            segDD:SetPoint("LEFT", actionRow, "LEFT", 60, 0)
-            local segText = "No Change"
-            if action.segment then
-                for _, seg in ipairs(ns.SEGMENTS) do
-                    if seg.id == action.segment then segText = seg.name break end
-                end
-            end
-            UIDropDownMenu_SetText(segDD, segText)
-
-            -- View dropdown (Attribute > Sub-attribute)
-            local viewDD = CreateDropdown(actionRow, 130, function(self, level)
-                for i, opt in ipairs(VIEW_OPTIONS) do
-                    local info = UIDropDownMenu_CreateInfo()
-                    info.text = opt.label
-                    info.checked = (FindViewIndex(action.attribute, action.sub_attribute) == i)
-                    info.func = function()
-                        binds[bindIdx].actions[windowId].attribute = opt.attribute
-                        binds[bindIdx].actions[windowId].sub_attribute = opt.sub_attribute
-                        CloseDropDownMenus()
-                        RefreshSettings()
-                    end
-                    UIDropDownMenu_AddButton(info, level)
-                end
-            end)
-            viewDD:SetPoint("LEFT", actionRow, "LEFT", 200, 0)
-            local viewText = VIEW_OPTIONS[FindViewIndex(action.attribute, action.sub_attribute)].label
-            UIDropDownMenu_SetText(viewDD, viewText)
-
-            -- Remove action button
-            local removeBtn = CreateFrame("Button", nil, actionRow, "UIPanelButtonTemplate")
+            local removeBtn = CreateFrame("Button", nil, winHeader, "UIPanelButtonTemplate")
             removeBtn:SetSize(20, 20)
-            removeBtn:SetPoint("RIGHT", actionRow, "RIGHT", 0, 0)
+            removeBtn:SetPoint("RIGHT", winHeader, "RIGHT", 0, 0)
             removeBtn:SetText("X")
             removeBtn:SetScript("OnClick", function()
-                bind.actions[windowId] = nil
+                bind.windows[windowId] = nil
                 RefreshSettings()
             end)
 
-            actionYOffset = actionYOffset - ACTION_ROW_HEIGHT
+            innerY = innerY - 22
+
+            -- State 1 row
+            if not winConfig.state1 then winConfig.state1 = {} end
+            CreateStateRow(content, bindFrame, "|cff88ff88S1|r", winConfig.state1, innerY, RefreshSettings)
+            innerY = innerY - 28
+
+            -- State 2 row
+            if not winConfig.state2 then winConfig.state2 = {} end
+            CreateStateRow(content, bindFrame, "|cffff8888S2|r", winConfig.state2, innerY, RefreshSettings)
+            innerY = innerY - 30
         end
 
-        -- Add action button
-        local addActionBtn = CreateFrame("Button", nil, bindFrame, "UIPanelButtonTemplate")
-        addActionBtn:SetSize(130, 20)
-        addActionBtn:SetPoint("TOPLEFT", bindFrame, "TOPLEFT", 8, actionYOffset - 4)
-        addActionBtn:SetText("+ Add Window")
-        addActionBtn:SetScript("OnClick", function()
-            -- Find next unused window ID (skip 0=All, start at 1)
+        -- Add window button
+        local addWinBtn = CreateFrame("Button", nil, bindFrame, "UIPanelButtonTemplate")
+        addWinBtn:SetSize(130, 20)
+        addWinBtn:SetPoint("TOPLEFT", bindFrame, "TOPLEFT", 8, innerY - 2)
+        addWinBtn:SetText("+ Add Window")
+        addWinBtn:SetScript("OnClick", function()
             local nextId = 1
-            while bind.actions[nextId] do nextId = nextId + 1 end
-            bind.actions[nextId] = { segment = -1 }
+            while bind.windows[nextId] do nextId = nextId + 1 end
+            bind.windows[nextId] = {
+                state1 = { attribute = 1, sub_attribute = 1 },
+                state2 = {},
+            }
             RefreshSettings()
         end)
 
-        actionYOffset = actionYOffset - 28
+        innerY = innerY - 26
 
-        local bindHeight = math.abs(actionYOffset) + 8
+        local bindHeight = math.abs(innerY) + 8
         bindFrame:SetHeight(bindHeight)
-
         yOffset = yOffset + bindHeight + BIND_PADDING
     end
 
@@ -324,7 +338,7 @@ local function RefreshSettings()
             name = "New Keybind",
             key = "LALT",
             mode = "hold",
-            actions = {},
+            windows = {},
         })
         RefreshSettings()
     end)
@@ -350,6 +364,18 @@ local function CreateSettingsFrame()
     f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
     f.title:SetPoint("TOPLEFT", f.TitleBg, "TOPLEFT", 6, -3)
     f.title:SetText("Details Quick Keybinds")
+
+    -- Debug toggle in title bar
+    local debugCheck = CreateFrame("CheckButton", "DQKDebugCheckbox", f, "UICheckButtonTemplate")
+    debugCheck:SetPoint("RIGHT", f.CloseButton, "LEFT", -4, 0)
+    debugCheck:SetSize(24, 24)
+    debugCheck:SetChecked(ns.debugEnabled)
+    debugCheck:SetScript("OnClick", function(self)
+        ns.debugEnabled = self:GetChecked()
+    end)
+    local debugLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    debugLabel:SetPoint("RIGHT", debugCheck, "LEFT", -2, 0)
+    debugLabel:SetText("Debug")
 
     -- Scroll frame
     local scrollFrame = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
