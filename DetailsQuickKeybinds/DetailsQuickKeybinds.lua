@@ -105,6 +105,8 @@ local defaults = {
 -- Runtime: tracks which state each bind is in (1 or 2)
 local bindStates = {} -- [bindIndex] = 1 or 2
 
+print("|cFF00FF00[DQK]|r Loaded v1.0.5-dev")
+
 -- Event frame
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
@@ -147,10 +149,13 @@ local function ApplyState(windowId, state)
         " sub=" .. tostring(state.sub_attribute))
 
     if IsBlizzardAPI() then
+        -- Blizzard API: SetSegment is disabled, use SetSegmentType instead
+        -- sessionType: 0 = Overall, 1 = Current
         if state.segment ~= nil then
-            local targetType = (state.segment == DETAILS_SEGMENTID_OVERALL) and 0 or 1
-            win:SetSegmentType(targetType)
-            dbg("  SetSegmentType -> " .. targetType)
+            -- Map Details segment IDs to Blizzard sessionType values
+            local sessionType = (state.segment == -1) and 0 or 1
+            win:SetSegmentType(sessionType, true)
+            dbg("  SetSegmentType -> " .. sessionType)
         end
 
         if state.attribute then
@@ -160,7 +165,7 @@ local function ApplyState(windowId, state)
             win.sub_atributo = subAttr
             win.sub_atributo_last[attr] = subAttr
             win:ChangeIcon()
-            dbg("  SetAttribute -> " .. attr .. "/" .. subAttr)
+            dbg("  attribute -> " .. attr .. "/" .. subAttr)
         end
 
         win:RefreshWindow(true)
@@ -176,6 +181,7 @@ end
 
 -- Resolve ALL_WINDOWS into individual IDs and apply a target state number
 local function ApplyBind(bind, targetState)
+    if not bind.windows then return end
     for windowId, windowConfig in pairs(bind.windows) do
         local state = (targetState == 2) and windowConfig.state2 or windowConfig.state1
         if not state then return end
@@ -249,6 +255,21 @@ frame:SetScript("OnEvent", function(self, event, ...)
             end
             if not DetailsQuickKeybindsDB.binds then
                 DetailsQuickKeybindsDB.binds = DeepCopy(defaultBinds)
+            else
+                -- Migrate old binds that have "actions" instead of "windows"
+                for _, bind in ipairs(DetailsQuickKeybindsDB.binds) do
+                    if not bind.windows then
+                        bind.windows = nil  -- clear any stale field
+                        -- Find matching default bind to restore windows config
+                        for _, def in ipairs(defaultBinds) do
+                            if def.name == bind.name then
+                                bind.windows = DeepCopy(def.windows)
+                                break
+                            end
+                        end
+                        bind.actions = nil  -- remove old field
+                    end
+                end
             end
 
             InitMinimapButton()
