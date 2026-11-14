@@ -43,10 +43,77 @@ local function LatestDay(t)
   return best
 end
 
-function Data:GetDB()
-  local db = Auctionator and Auctionator.Database and Auctionator.Database.db
-  if type(db) == "table" then return db end
+-- Which of Auctionator's realm databases to read. nil = the one Auctionator
+-- has loaded for this character. On WoW Forever the keys are rulesets
+-- ("PvE", "PvP", "RP", ...); elsewhere they are realm names.
+Data.source = nil
+local decoded = {} -- realm key -> deserialized table (other realms only)
+
+function Data:CurrentRealm()
+  return Auctionator and Auctionator.State and Auctionator.State.CurrentRealm
+end
+
+-- Sorted list of realm keys that have price data (current realm first).
+function Data:ListRealms()
+  local list = {}
+  if type(AUCTIONATOR_PRICE_DATABASE) == "table" then
+    for key, data in pairs(AUCTIONATOR_PRICE_DATABASE) do
+      if type(key) == "string" and key ~= "__dbversion"
+         and (type(data) == "table" or type(data) == "string") then
+        list[#list + 1] = key
+      end
+    end
+  end
+  local current = self:CurrentRealm()
+  table.sort(list, function(a, b)
+    if a == current then return true end
+    if b == current then return false end
+    return a < b
+  end)
+  return list
+end
+
+function Data:ActiveRealm()
+  return self.source or self:CurrentRealm()
+end
+
+-- Returns true if the source changed.
+function Data:SetSource(realm)
+  if realm == self:CurrentRealm() then realm = nil end
+  if realm == self.source then return false end
+  self.source = realm
+  self.built = false
+  return true
+end
+
+local function Decode(raw)
+  if type(raw) == "table" then return raw end
+  if type(raw) ~= "string" then return nil end
+  local ok, data
+  if C_EncodingUtil and C_EncodingUtil.DeserializeCBOR then
+    ok, data = pcall(C_EncodingUtil.DeserializeCBOR, raw)
+  end
+  if not ok and LibStub then
+    local lib = LibStub("LibCBOR-1.0", true)
+    if lib then ok, data = pcall(lib.Deserialize, lib, raw) end
+  end
+  if ok and type(data) == "table" then return data end
   return nil
+end
+
+function Data:GetDB()
+  local source = self.source
+  if not source or source == self:CurrentRealm() then
+    local db = Auctionator and Auctionator.Database and Auctionator.Database.db
+    if type(db) == "table" then return db end
+    return nil
+  end
+  if decoded[source] == nil then
+    -- Decode a private copy; Auctionator's saved variable stays untouched.
+    local raw = type(AUCTIONATOR_PRICE_DATABASE) == "table" and AUCTIONATOR_PRICE_DATABASE[source]
+    decoded[source] = Decode(raw) or false
+  end
+  return decoded[source] or nil
 end
 
 function Data:IsReady()
@@ -228,18 +295,39 @@ function Data:Query(q)
   return out, skipped
 end
 
-function Data:GetHistory(e)
-  local db = Auctionator and Auctionator.Database
-  if not db or not db.GetPriceHistory then return {} end
-  local ok, history = pcall(db.GetPriceHistory, db, e.key)
-  return ok and history or {}
+local function PrettyDay(day)
+  local day0 = (Auctionator and Auctionator.Constants and Auctionator.Constants.SCAN_DAY_0)
+    or time({ year = 2020, month = 1, day = 1, hour = 0 })
+  local t = day * 86400 + day0
+  if Auctionator and Auctionator.Utilities and Auctionator.Utilities.PrettyDate then
+    local ok, s = pcall(Auctionator.Utilities.PrettyDate, t)
+    if ok and s then return s end
+  end
+  return date("%a %d %b", t)
 end
 
-function Data:GetMean(e, days)
-  local db = Auctionator and Auctionator.Database
-  if not db or not db.GetMeanPrice then return nil end
-  local ok, mean = pcall(db.GetMeanPrice, db, e.key, days)
-  if ok then return mean end
+-- Same shape as Auctionator's GetPriceHistory, but reads the selected DB.
+function Data:GetHistory(e)
+  local db = self:GetDB()
+  local item = db and db[e.key]
+  if type(item) ~= "table" or type(item.h) ~= "table" then return {} end
+  local l, a = item.l or {}, item.a or {}
+  local days = {}
+  for day in pairs(item.h) do
+    if tonumber(day) then days[#days + 1] = day end
+  end
+  table.sort(days, function(x, y) return tonumber(x) > tonumber(y) end)
+  local out = {}
+  for _, day in ipairs(days) do
+    out[#out + 1] = {
+      date = PrettyDay(tonumber(day)),
+      rawDay = day,
+      minSeen = l[day] or item.h[day],
+      maxSeen = item.h[day],
+      available = a[day],
+    }
+  end
+  return out
 end
 
 function Data:HistoryDays()

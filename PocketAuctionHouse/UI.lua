@@ -244,6 +244,7 @@ local function SetPortrait(f, file)
 end
 
 local UpdateCategories, RunSearch, ShowDetail, ShowList, UpdateHeaders, UpdateStatus, UpdateMoney
+local UpdateSourceTabs, UpdateTitle
 
 -- category list ------------------------------------------------------------
 local CAT_STYLE = {
@@ -765,7 +766,7 @@ local function BuildFrame()
     bg:SetPoint("BOTTOMRIGHT", -2, 2)
     bg:SetColorTexture(0.06, 0.06, 0.06, 0.95)
   end
-  SetTitle(frame, (AUCTION_HOUSE or "Auction House") .. " |cff9d9d9d(offline)|r")
+  UpdateTitle()
   SetPortrait(frame, "Interface\\Icons\\INV_Misc_Coin_01")
 
   -- search bar -------------------------------------------------------------
@@ -908,20 +909,10 @@ local function BuildFrame()
   frame.Status:SetPoint("BOTTOMRIGHT", -14, 9)
   frame.Status:SetTextColor(0.7, 0.7, 0.7)
 
-  -- a single "Buy" tab under the frame, like the real one
-  pcall(function()
-    local tabTemplate = (HasTemplate("PanelTabButtonTemplate") and "PanelTabButtonTemplate")
-      or (HasTemplate("CharacterFrameTabButtonTemplate") and "CharacterFrameTabButtonTemplate")
-    if not tabTemplate then return end
-    local tab = CreateFrame("Button", "PocketAHFrameTab1", frame, tabTemplate)
-    tab:SetID(1)
-    tab:SetText(AUCTION_HOUSE_BUY_TAB or BUY or "Buy")
-    tab:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", 20, 2)
-    if PanelTemplates_TabResize then PanelTemplates_TabResize(tab, 0) end
-    frame.Tabs = { tab }
-    frame.numTabs = 1
-    if PanelTemplates_SetTab then PanelTemplates_SetTab(frame, 1) end
-  end)
+  -- tabs under the frame (like the real AH), one per Auctionator price
+  -- database; built/refreshed in UpdateSourceTabs on show
+  frame.Tabs = {}
+  frame.numTabs = 0
 
   -- events -----------------------------------------------------------------
   local refreshPending = false
@@ -950,6 +941,7 @@ local function BuildFrame()
     frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
     frame:RegisterEvent("PLAYER_MONEY")
     PlaySoundKit("AUCTION_WINDOW_OPEN")
+    UpdateSourceTabs()
     Data:Rebuild()
     UpdateMoney()
     UpdateHeaders()
@@ -972,6 +964,87 @@ end
 ---------------------------------------------------------------------------
 function UpdateMoney()
   frame.MoneyText:SetText(Money(GetMoney()))
+end
+
+function UpdateTitle()
+  local title = (AUCTION_HOUSE or "Auction House") .. " |cff9d9d9d(offline)|r"
+  if Data.source then
+    title = title .. " - |cffffd200" .. Data.source .. "|r"
+  end
+  SetTitle(frame, title)
+end
+
+local function SelectSource(realm)
+  if not Data:SetSource(realm) then return end
+  ns.db.source = Data.source
+  UpdateSourceTabs()
+  UpdateTitle()
+  if frame.Detail:IsShown() then ShowList() end
+  Data:Rebuild()
+  RunSearch()
+end
+
+local tabTemplate
+function UpdateSourceTabs()
+  -- restore the saved choice, dropping it if that database is gone
+  local realms = Data:ListRealms()
+  local saved = ns.db.source
+  if saved then
+    local found = false
+    for _, r in ipairs(realms) do if r == saved then found = true end end
+    if not found then saved = nil; ns.db.source = nil end
+  end
+  Data:SetSource(saved)
+  UpdateTitle()
+
+  if tabTemplate == nil then
+    tabTemplate = (HasTemplate("PanelTabButtonTemplate") and "PanelTabButtonTemplate")
+      or (HasTemplate("CharacterFrameTabButtonTemplate") and "CharacterFrameTabButtonTemplate")
+      or false
+  end
+  if not tabTemplate then return end
+
+  local current = Data:CurrentRealm()
+  local active = Data:ActiveRealm()
+  local selectedIndex
+  for i, realm in ipairs(realms) do
+    local tab = frame.Tabs[i]
+    if not tab then
+      local ok, created = pcall(CreateFrame, "Button", "PocketAHFrameTab" .. i, frame, tabTemplate)
+      if not ok then return end
+      tab = created
+      tab:SetID(i)
+      if i == 1 then
+        tab:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", 20, 2)
+      else
+        tab:SetPoint("LEFT", frame.Tabs[i - 1], "RIGHT", -16, 0)
+      end
+      tab:SetScript("OnClick", function(self)
+        PlaySoundKit("IG_CHARACTER_INFO_TAB")
+        SelectSource(self.realm)
+      end)
+      tab:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText(self.realm, 1, 1, 1)
+        if self.realm == Data:CurrentRealm() then
+          GameTooltip:AddLine("The Auction House your character is on.", nil, nil, nil, true)
+        else
+          GameTooltip:AddLine("Prices Auctionator saved while you played on this Auction House.", nil, nil, nil, true)
+        end
+        GameTooltip:Show()
+      end)
+      tab:SetScript("OnLeave", GameTooltip_Hide)
+      frame.Tabs[i] = tab
+    end
+    tab.realm = realm
+    tab:SetText(realm == current and (realm .. " |cff9d9d9d(here)|r") or realm)
+    if PanelTemplates_TabResize then pcall(PanelTemplates_TabResize, tab, 0) end
+    tab:Show()
+    if realm == active then selectedIndex = i end
+  end
+  for i = #realms + 1, #frame.Tabs do frame.Tabs[i]:Hide() end
+  frame.numTabs = #realms
+  if selectedIndex and PanelTemplates_SetTab then pcall(PanelTemplates_SetTab, frame, selectedIndex) end
 end
 
 function UpdateHeaders()
