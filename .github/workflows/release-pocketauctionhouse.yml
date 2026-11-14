@@ -1,0 +1,24 @@
+name: Release PocketAuctionHouse
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'PocketAuctionHouse/**'
+      - '.github/workflows/release-pocketauctionhouse.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: "!contains(github.event.head_commit.message, 'chore: bump')"
+    uses: ./.github/workflows/release-addon.yml
+    with:
+      addon: PocketAuctionHouse
+      cf_project_id: "1804868"
+      # WoW Forever (client 1.60.x); picks the newest matching version on CurseForge
+      game_version_regex: '^1\.6[0-9]\.'
+    secrets:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}

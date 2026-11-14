@@ -1,0 +1,5 @@
+<Bindings>
+  <Binding name="POCKETAH_TOGGLE" header="POCKETAH" category="ADDONS">
+    PocketAH_Toggle()
+  </Binding>
+</Bindings>

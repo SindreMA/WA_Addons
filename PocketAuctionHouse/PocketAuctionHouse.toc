@@ -1,0 +1,15 @@
+## Interface: 16001
+## Title: Pocket Auction House
+## Notes: Browse your Auctionator price database anywhere, in a copy of the Auction House Browse window.
+## Author: SindreMA
+## Version: 1.0.0
+## Dependencies: Auctionator
+## SavedVariables: PocketAHDB
+## IconTexture: Interface\Icons\INV_Misc_Coin_01
+## AddonCompartmentFunc: PocketAH_Toggle
+
+Core.lua
+Data.lua
+Categories.lua
+UI.lua
+Minimap.lua

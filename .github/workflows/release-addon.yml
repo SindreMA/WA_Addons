@@ -9,6 +9,11 @@ on:
       cf_project_id:
         required: true
         type: string
+      game_version_regex:
+        description: "Regex matched against CurseForge game version names (e.g. '^1\\.6[0-9]\\.' for WoW Forever). Empty = latest retail."
+        required: false
+        type: string
+        default: ""
     secrets:
       CF_API_KEY:
         required: false
@@ -69,6 +74,7 @@ jobs:
       - name: Upload to CurseForge
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          GAME_VERSION_REGEX: ${{ inputs.game_version_regex }}
         run: |
           VERSION="${{ steps.info.outputs.version }}"
 
@@ -85,7 +91,16 @@ jobs:
           GAME_VERSIONS=$(curl -s -H "X-Api-Token: ${CF_API_KEY}" \
             "https://wow.curseforge.com/api/game/versions")
 
-          RETAIL_VERSION_ID=$(echo "${GAME_VERSIONS}" | jq '[.[] | select(.gameVersionTypeID == 517)] | sort_by(.id) | last | .id')
+          if [ -n "${GAME_VERSION_REGEX}" ]; then
+            RETAIL_VERSION_ID=$(echo "${GAME_VERSIONS}" | jq --arg re "${GAME_VERSION_REGEX}" '[.[] | select(.name | test($re))] | sort_by(.id) | last | .id')
+          else
+            RETAIL_VERSION_ID=$(echo "${GAME_VERSIONS}" | jq '[.[] | select(.gameVersionTypeID == 517)] | sort_by(.id) | last | .id')
+          fi
+          if [ -z "${RETAIL_VERSION_ID}" ] || [ "${RETAIL_VERSION_ID}" = "null" ]; then
+            echo "::error::No CurseForge game version found (regex: '${GAME_VERSION_REGEX:-retail}')"
+            exit 1
+          fi
+          echo "Using CurseForge game version id ${RETAIL_VERSION_ID}"
 
           METADATA=$(cat <<'METAEOF'
           {
