@@ -78,11 +78,63 @@ local function BuildFallback()
   return nodes
 end
 
+-- Weapons subtree with explicit subclass IDs. Blizzard's weapon leaves don't
+-- always carry a subClassID on this client (the server-side AH resolves them),
+-- so "One-Handed > Maces" matched every weapon incl. two-handers. IDs are the
+-- stable Enum.ItemWeaponSubclass values.
+local WEAPON_CLASS = 2
+local WEAPON_GROUPS = {
+  { name = AUCTION_SUBCATEGORY_ONE_HANDED or "One-Handed", subs = { 0, 4, 7, 15, 13 } },
+  { name = AUCTION_SUBCATEGORY_TWO_HANDED or "Two-Handed", subs = { 1, 5, 8, 6, 10 } },
+  { name = AUCTION_SUBCATEGORY_RANGED or "Ranged", subs = { 2, 18, 3, 16, 19 } },
+  { name = AUCTION_SUBCATEGORY_MISCELLANEOUS or MISCELLANEOUS or "Miscellaneous", subs = { 20, 14 } },
+}
+
+local function BuildWeaponChildren(weaponNode)
+  local GetSubClassInfo = (C_Item and C_Item.GetItemSubClassInfo) or GetItemSubClassInfo
+  local groups = {}
+  for _, g in ipairs(WEAPON_GROUPS) do
+    local group = { name = g.name, depth = weaponNode.depth + 1, parent = weaponNode, filters = {} }
+    local children = {}
+    for _, sub in ipairs(g.subs) do
+      local subName = GetSubClassInfo(WEAPON_CLASS, sub)
+      if subName and subName ~= "" then
+        subName = subName:gsub("^One%-Handed ", ""):gsub("^Two%-Handed ", "")
+        local filter = { classID = WEAPON_CLASS, subClassID = sub }
+        group.filters[#group.filters + 1] = filter
+        children[#children + 1] = {
+          name = subName, depth = group.depth + 1, parent = group, filters = { filter },
+        }
+      end
+    end
+    if #children > 0 then
+      group.children = children
+      groups[#groups + 1] = group
+    end
+  end
+  return groups
+end
+
+local function FixWeapons(nodes)
+  for _, node in ipairs(nodes) do
+    local allWeapon = #node.filters > 0
+    for _, f in ipairs(node.filters) do
+      if f.classID ~= WEAPON_CLASS then allWeapon = false break end
+    end
+    if allWeapon then
+      node.filters = { { classID = WEAPON_CLASS } }
+      node.children = BuildWeaponChildren(node)
+      return
+    end
+  end
+end
+
 function ns:GetCategories()
   if self.categories then return self.categories end
   if TryLoadBlizzardCategories() then
     self.categories = Convert(AuctionCategories, 1, nil)
     self.categorySource = "blizzard"
+    FixWeapons(self.categories)
   end
   if not self.categories or #self.categories == 0 then
     self.categories = BuildFallback()

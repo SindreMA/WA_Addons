@@ -950,12 +950,14 @@ local function BuildFrame()
       ShowList()
     end
     RunSearch()
+    ns.Fire("show")
   end)
   frame:SetScript("OnHide", function()
     frame:UnregisterEvent("GET_ITEM_INFO_RECEIVED")
     frame:UnregisterEvent("PLAYER_MONEY")
     frame.FilterPopup:Hide()
     PlaySoundKit("AUCTION_WINDOW_CLOSE")
+    ns.Fire("hide")
   end)
 end
 
@@ -1200,6 +1202,39 @@ end
 function ns:GetFrame()
   if not frame then BuildFrame() end
   return frame
+end
+
+---------------------------------------------------------------------------
+-- public API (used by Auction Upgrades to scan the price DB offline)
+---------------------------------------------------------------------------
+local callbacks = {}
+function ns.Fire(event)
+  for _, fn in ipairs(callbacks) do pcall(fn, event) end
+end
+
+PocketAH = PocketAH or {}
+function PocketAH.Frame() return frame end
+function PocketAH.IsShown() return frame ~= nil and frame:IsShown() end
+function PocketAH.RegisterCallback(fn) callbacks[#callbacks + 1] = fn end
+function PocketAH.Categories() return ns:GetCategories() end
+-- The category picked on the left (nil = none) and its names from the top.
+function PocketAH.SelectedCategory()
+  local names, c = {}, state.category
+  while c do
+    table.insert(names, 1, c.name)
+    c = c.parent
+  end
+  return state.category, names
+end
+-- Every price-DB entry matching a category filter list (loaded or not).
+function PocketAH.Entries(filters)
+  if not Data.built and not Data:Rebuild() then return nil end
+  return (Data:Query({ filters = filters }))
+end
+function PocketAH.ShowEntry(e)
+  local f = ns:GetFrame()
+  if not f:IsShown() then f:Show() end
+  ShowDetail(e)
 end
 
 function ns:SearchFor(text)
